@@ -1,0 +1,3 @@
+venv
+cpp-fs/build
+cpp-fs/CMakeUserPresets.json

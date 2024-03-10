@@ -1,0 +1,7 @@
+[requires]
+boost/1.84.0
+gtest/1.14.0
+
+[generators]
+CMakeDeps
+CMakeToolchain
