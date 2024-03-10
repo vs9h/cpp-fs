@@ -1,0 +1,6 @@
+include(debug)
+
+[settings]
+build_type=ASAN
+boost/*:build_type=Debug
+gtest/*:build_type=Debug
