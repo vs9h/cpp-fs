@@ -1,0 +1,37 @@
+name: Build and test
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches:
+      - main
+jobs:
+  build_and_test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        cfg:
+          - { BUILD_TYPE: release }
+          - { BUILD_TYPE: debug }
+          - { BUILD_TYPE: asan }
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install build tools
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install gcc-10 g++-10 cmake build-essential -y
+        shell: bash
+      - name: Install conan
+        id: conan
+        uses: turtlebrowser/get-conan@main
+      - name: Conan version
+        run: echo "${{ steps.conan.outputs.version }}"
+      - name: Download dependencies
+        working-directory: ./cpp-fs
+        run: make prepare-${{ matrix.cfg.BUILD_TYPE }}
+      - name: Build
+        working-directory: ./cpp-fs
+        run: make ${{ matrix.cfg.BUILD_TYPE }}
+      - name: Test
+        working-directory: ./cpp-fs
+        run: make ${{ matrix.cfg.BUILD_TYPE }}-test
