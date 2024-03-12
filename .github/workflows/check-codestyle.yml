@@ -1,0 +1,63 @@
+name: Check codestyle
+on:
+  pull_request:
+jobs:
+  clang-format-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Pull clang-format
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-format-14
+      - name: Check formatting
+        run: |
+          formatterOutput=$( git diff -U0 origin/$GITHUB_BASE_REF...HEAD | clang-format-diff-14 -p 1)
+
+          if [ "$formatterOutput" != "" ]
+          then
+            echo ":x: :x: :x:" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`c++" >> $GITHUB_STEP_SUMMARY
+            echo "$formatterOutput" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            echo "$formatterOutput"
+            exit 1
+          fi
+
+          echo "$formatterOutput"
+          echo "### $formatterOutput :heavy_check_mark:" >> $GITHUB_STEP_SUMMARY
+
+  clang-tidy-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install build tools
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install gcc-10 g++-10 cmake build-essential -y
+        shell: bash
+      - name: Install conan
+        id: conan
+        uses: turtlebrowser/get-conan@main
+      - name: Conan version
+        run: echo "${{ steps.conan.outputs.version }}"
+      - name: Generate compile commands
+        working-directory: ./cpp-fs
+        run: |
+          make prepare-debug
+          make debug
+
+      - uses: ZedThree/clang-tidy-review@v0.14.0
+        id: review
+        with:
+          build_dir: ./cpp-fs/build/debug
+          config_file: './cpp-fs/.clang-tidy'
+
+      - uses: ZedThree/clang-tidy-review/upload@v0.14.0
+        id: upload-review
+
+      - name: Fail the check if clang-tidy reported issues
+        if: steps.review.outputs.total_comments > 0
+        run: exit 1
