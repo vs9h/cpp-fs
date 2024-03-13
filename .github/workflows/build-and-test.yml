@@ -14,13 +14,19 @@ jobs:
           - { BUILD_TYPE: release }
           - { BUILD_TYPE: debug }
           - { BUILD_TYPE: asan }
+        include:
+          - gcc: 13
     steps:
       - uses: actions/checkout@v3
       - name: Install build tools
         run: |
           sudo apt-get update -y
-          sudo apt-get install gcc-10 g++-10 cmake build-essential -y
+          sudo apt-get install "gcc-${{ matrix.gcc }}" "g++-${{ matrix.gcc }}" cmake build-essential -y
         shell: bash
+      - name: Set gcc version
+        run: |
+          echo "CC=gcc-${{ matrix.gcc }}" >> $GITHUB_ENV
+          echo "CXX=g++-${{ matrix.gcc }}" >> $GITHUB_ENV
       - name: Install conan
         id: conan
         uses: turtlebrowser/get-conan@main
