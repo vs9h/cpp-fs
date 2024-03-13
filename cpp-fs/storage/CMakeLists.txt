@@ -1,4 +1,2 @@
-project(storage CXX)
-
-add_executable(${PROJECT_NAME} main.cpp)
-target_link_libraries(${PROJECT_NAME} PRIVATE Boost::headers)
+add_subdirectory(storage)
+add_subdirectory(test)
