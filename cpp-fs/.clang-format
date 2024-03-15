@@ -9,3 +9,4 @@ IncludeCategories:
 QualifierAlignment: Custom
 QualifierOrder: ['inline', 'static', 'type', 'const', 'volatile']
 SeparateDefinitionBlocks: Always
+IndentRequires: True
