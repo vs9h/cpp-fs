@@ -1,15 +1,75 @@
 #pragma once
 
+#include <filesystem>
+#include <ostream>
+#include <shared_mutex>
 #include <string>
 #include <tl/expected.hpp>
+#include <unistd.h>
 
 #include "error_types.h"
 
 namespace cppfs::storage {
 
+/// Supported file types
+enum class FileType {
+  Regular,
+  Directory,
+};
+
+class File {
+ public:
+  using Offset = ssize_t;
+
+  explicit File(FileType type) : type_(type){};
+  virtual ~File() = default;
+
+  virtual size_t GetSize() const = 0;
+
+  FileType GetType() const { return type_; }
+
+ private:
+  FileType type_;
+};
+
+class RegularFile : public File {
+ public:
+  RegularFile() : File(FileType::Regular) {}
+
+  virtual ssize_t Read(std::ostream& out, size_t nbytes) = 0;
+  /* Works like lseek() with `SEEK_SET` flag */
+  virtual ssize_t Seek(size_t offset) = 0;
+  virtual ssize_t PositionalRead(std::ostream& out, size_t offset,
+                                 size_t nbytes) = 0;
+};
+
+class Directory : public File {
+ public:
+  struct DirEntry {
+    std::string name;
+    FileType type;
+    size_t size;
+  };
+
+  Directory() : File(FileType::Directory) {}
+
+  virtual std::vector<DirEntry> GetDirEntries() const = 0;
+};
+
 class Partition {
  public:
   virtual ~Partition() = default;
+
+  /// open file relative to the partition root
+  virtual tl::expected<File*, Error> Open(
+      std::filesystem::path const& path) const = 0;
+
+  /// open file relative to @c dir
+  virtual tl::expected<File*, Error> Open(
+      Directory const* dir, std::filesystem::path const& path) const = 0;
+
+ private:
+  mutable std::shared_mutex mutex_;
 };
 
 class PartitionManager {
