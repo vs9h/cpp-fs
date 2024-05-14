@@ -7,7 +7,7 @@ on:
       - main
 jobs:
   build_and_test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         cfg:
@@ -28,10 +28,8 @@ jobs:
           echo "CC=gcc-${{ matrix.gcc }}" >> $GITHUB_ENV
           echo "CXX=g++-${{ matrix.gcc }}" >> $GITHUB_ENV
       - name: Install conan
-        id: conan
-        uses: turtlebrowser/get-conan@main
-      - name: Conan version
-        run: echo "${{ steps.conan.outputs.version }}"
+        run: pip3 install conan==2.3.0 --upgrade --break-system-packages
+        shell: bash
       - name: Download dependencies
         working-directory: ./cpp-fs
         run: make prepare-${{ matrix.cfg.BUILD_TYPE }}

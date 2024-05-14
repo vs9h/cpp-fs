@@ -3,7 +3,7 @@ on:
   pull_request:
 jobs:
   clang-format-check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v3
         with:
@@ -30,7 +30,7 @@ jobs:
           echo "### $formatterOutput :heavy_check_mark:" >> $GITHUB_STEP_SUMMARY
 
   clang-tidy-check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         include:
@@ -47,10 +47,8 @@ jobs:
           echo "CC=gcc-${{ matrix.gcc }}" >> $GITHUB_ENV
           echo "CXX=g++-${{ matrix.gcc }}" >> $GITHUB_ENV
       - name: Install conan
-        id: conan
-        uses: turtlebrowser/get-conan@main
-      - name: Conan version
-        run: echo "${{ steps.conan.outputs.version }}"
+        run: pip3 install conan==2.3.0 --upgrade --break-system-packages
+        shell: bash
       - name: Generate compile commands
         working-directory: ./cpp-fs
         run: |
