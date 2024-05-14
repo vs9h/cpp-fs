@@ -33,7 +33,7 @@ TYPED_TEST_SUITE(StorageTest, PartitionManagers);
 
 TYPED_TEST(StorageTest, CreatePartition) {
   std::string uuid{kValidUUID};
-  auto partition = this->storage_->CreatePartition(uuid, 1024);
+  auto partition = this->storage_->CreatePartition(uuid);
   ASSERT_TRUE(partition.has_value() && partition.value() != nullptr);
 
   auto has_partition = this->storage_->LookupPartition(uuid).has_value();
@@ -41,7 +41,7 @@ TYPED_TEST(StorageTest, CreatePartition) {
 }
 
 TYPED_TEST(StorageTest, CreatePartitionIncorrectUUID) {
-  auto partition = this->storage_->CreatePartition(kInvalidUUID, 1024);
+  auto partition = this->storage_->CreatePartition(kInvalidUUID);
   ASSERT_FALSE(partition.has_value());
   ASSERT_EQ(partition.error().code, cppfs::storage::ErrorEnum::kInvalidInput);
 }
@@ -54,10 +54,9 @@ TYPED_TEST(StorageTest, LookupPartitionIncorrectUUID) {
 
 TYPED_TEST(StorageTest, CreatePartitionAlreadyExists) {
   std::string uuid{kValidUUID};
-  auto partition = this->storage_->CreatePartition(uuid, 1024);
+  auto partition = this->storage_->CreatePartition(uuid);
   ASSERT_TRUE(partition.has_value());
-  partition = this->storage_->CreatePartition(uuid, 1024);
-  ASSERT_FALSE(partition.has_value());
+  partition = this->storage_->CreatePartition(uuid);
   ASSERT_EQ(partition.error().code, cppfs::storage::ErrorEnum::kAlreadyExists);
 }
 
