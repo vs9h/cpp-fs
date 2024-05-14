@@ -2,3 +2,5 @@ venv
 cpp-fs/build
 cpp-fs/CMakeUserPresets.json
 *.pem
+.cache
+compile_commands.json
