@@ -45,8 +45,7 @@ class Storage {
   }
 
   /// try to create new partition
-  tl::expected<Partition*, Error> CreatePartition(std::string const& uuid,
-                                                  size_t kb) {
+  tl::expected<Partition*, Error> CreatePartition(std::string const& uuid) {
     auto const lookup = LookupPartition(uuid);
     if (lookup) {
       return tl::unexpected(
@@ -57,7 +56,7 @@ class Storage {
       return tl::unexpected(lookup.error());
     }
     std::lock_guard const lock_guard{mutex_};
-    return manager_->CreatePartition(uuid, kb);
+    return manager_->CreatePartition(uuid);
   }
 
   void Clear() { manager_->Clear(); }
