@@ -3,7 +3,7 @@ on:
   pull_request:
 jobs:
   clang-format-check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v3
         with:
@@ -30,7 +30,7 @@ jobs:
           echo "### $formatterOutput :heavy_check_mark:" >> $GITHUB_STEP_SUMMARY
 
   clang-tidy-check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         include:
