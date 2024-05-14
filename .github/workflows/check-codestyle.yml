@@ -47,10 +47,8 @@ jobs:
           echo "CC=gcc-${{ matrix.gcc }}" >> $GITHUB_ENV
           echo "CXX=g++-${{ matrix.gcc }}" >> $GITHUB_ENV
       - name: Install conan
-        id: conan
-        uses: turtlebrowser/get-conan@main
-      - name: Conan version
-        run: echo "${{ steps.conan.outputs.version }}"
+        run: pip3 install conan==2.3.0 --upgrade --break-system-packages
+        shell: bash
       - name: Generate compile commands
         working-directory: ./cpp-fs
         run: |
