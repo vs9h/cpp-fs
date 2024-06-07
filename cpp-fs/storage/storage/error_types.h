@@ -9,6 +9,8 @@ enum class ErrorEnum {
   kNotFound,
   kAlreadyExists,
   kOutOfMemory,
+  kDirectory,
+  kInternalServerError,
 };
 
 struct Error {
