@@ -1,8 +1,8 @@
 project(storage CXX)
 
 set(STORAGE_NAME storagelib)
-add_library(${STORAGE_NAME} storage.cpp)
-target_link_libraries(${STORAGE_NAME} PRIVATE Boost::headers)
+add_library(${STORAGE_NAME} storage.cpp server/server.cpp)
+target_link_libraries(${STORAGE_NAME} PRIVATE Boost::headers Boost::json)
 target_link_libraries(${STORAGE_NAME} PUBLIC tl::expected)
 target_include_directories(${STORAGE_NAME}
   PUBLIC
