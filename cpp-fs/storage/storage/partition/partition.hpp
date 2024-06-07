@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <filesystem>
+#include <format>
 #include <ostream>
 #include <shared_mutex>
 #include <string>
@@ -17,6 +18,16 @@ enum class FileType {
   Regular,
   Directory,
 };
+
+inline std::string FileTypeToString(FileType type) {
+  switch (type) {
+    case FileType::Regular:
+      return "Regular";
+    case FileType::Directory:
+      return "Directory";
+  }
+  return "Unknown";
+}
 
 class File {
  public:
@@ -72,6 +83,42 @@ class Partition {
   /// open file relative to @c dir
   virtual tl::expected<File*, Error> Open(
       Directory* dir, std::filesystem::path const& path) = 0;
+
+  /// open directory relative to the partition root
+  virtual tl::expected<Directory*, Error> OpenDir(
+      std::filesystem::path const& path) {
+    tl::expected<File*, Error> file_expected = Open(path);
+    if (!file_expected.has_value())
+      return tl::unexpected{file_expected.error()};
+
+    File* file = file_expected.value();
+    auto dir = dynamic_cast<Directory*>(file);
+    if (dir == nullptr) {
+      return tl::unexpected(Error{
+          ErrorEnum::kDirectory,
+          std::format("Expected directory, but received regular file '{}'",
+                      path.filename().c_str())});
+    }
+    return dir;
+  }
+
+  /// open regular file relative to the partition root
+  virtual tl::expected<RegularFile*, Error> OpenRegularFile(
+      std::filesystem::path const& path) {
+    tl::expected<File*, Error> file_expected = Open(path);
+    if (!file_expected.has_value())
+      return tl::unexpected{file_expected.error()};
+
+    File* file = file_expected.value();
+    auto reg_file = dynamic_cast<RegularFile*>(file);
+    if (reg_file == nullptr) {
+      return tl::unexpected(Error{
+          ErrorEnum::kDirectory,
+          std::format("Expected regular file, but received directory '{}'",
+                      path.filename().c_str())});
+    }
+    return reg_file;
+  }
 
   Directory* OpenRoot() {
     auto root_file = Open("/");
