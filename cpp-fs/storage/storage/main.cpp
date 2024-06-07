@@ -1,6 +1,3 @@
-#include <iostream>
+#include <server/server.hpp>
 
-int main() {
-  std::cout << "Hello, storage!" << std::endl;
-  return 0;
-}
+int main() { cppfs::storage::StartFS("localhost", 8080); }

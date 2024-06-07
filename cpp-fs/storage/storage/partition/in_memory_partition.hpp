@@ -122,7 +122,7 @@ class InMemoryPartition final : public Partition {
     }
     return tl::unexpected(Error{
         ErrorEnum::kNotFound,
-        std::format("Expected absolute path, but received {}", path.string())});
+        std::format("Expected absolute path, but received '{}'", path.string())});
   }
 
   /// open file relative to @c dir
@@ -139,7 +139,7 @@ class InMemoryPartition final : public Partition {
         if (std::next(it) == path.end()) return file.get();
         if (file->GetType() == FileType::Regular) {
           return tl::unexpected(Error{
-              ErrorEnum::kNotFound,
+              ErrorEnum::kDirectory,
               std::format("Expected directory, but received regular file '{}'",
                           name)});
         }
