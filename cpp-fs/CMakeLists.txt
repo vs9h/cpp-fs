@@ -17,4 +17,3 @@ find_package(tl-expected REQUIRED CONFIG)
 enable_testing()
 
 add_subdirectory(storage)
-add_subdirectory(balancer)
