@@ -4,11 +4,10 @@
 #include <boost/json.hpp>
 
 #include "error_types.h"
+#include "httplib.h"
 #include "partition/in_memory_partition.hpp"
 #include "partition/partition.hpp"
 #include "storage.hpp"
-
-#include "httplib.h"
 
 namespace cppfs::storage {
 
