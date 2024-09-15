@@ -120,9 +120,10 @@ class InMemoryPartition final : public Partition {
     if (path.is_absolute()) {
       return Open(&root_, path.relative_path());
     }
-    return tl::unexpected(Error{
-        ErrorEnum::kNotFound,
-        std::format("Expected absolute path, but received '{}'", path.string())});
+    return tl::unexpected(
+        Error{ErrorEnum::kNotFound,
+              std::format("Expected absolute path, but received '{}'",
+                          path.string())});
   }
 
   /// open file relative to @c dir
