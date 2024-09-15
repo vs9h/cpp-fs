@@ -13,6 +13,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 find_package(Boost REQUIRED)
 find_package(GTest REQUIRED)
 find_package(tl-expected REQUIRED CONFIG)
+find_package(httplib REQUIRED)
 
 enable_testing()
 
