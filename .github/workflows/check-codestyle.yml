@@ -60,6 +60,7 @@ jobs:
         with:
           build_dir: ./cpp-fs/build/debug
           config_file: './cpp-fs/.clang-tidy'
+          lgtm_comment_body: ''
 
       - uses: ZedThree/clang-tidy-review/upload@v0.14.0
         id: upload-review
