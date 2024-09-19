@@ -7,10 +7,13 @@ import threading
 import time
 import requests
 import yaml
+import json
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import urllib3
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+clients = {}
 
 class Storage:
     def __init__(self, ip, port):
@@ -34,6 +37,18 @@ class Storage:
             print(f"Error pinging storage {self.ip}:{self.port}: {e}")
             return False
 
+    def create_client(self, client_id):
+        try:
+            url = f"https://{self.ip}:{self.port}/create_client"
+            response = requests.post(url, json={"client_id": client_id}, verify=False)
+            if response.status_code == 200:
+                return response.json()
+            else:
+                print(f"Storage {self.ip}:{self.port} did not return valid response: {response.text}.")
+                return None
+        except requests.RequestException as e:
+            print(f"Error creating client on storage {self.ip}:{self.port}: {e}")
+            return None
 
 class HTTPHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -48,16 +63,87 @@ class HTTPHandler(BaseHTTPRequestHandler):
             post_data = self.rfile.read(content_length)
             post_data = urllib.parse.parse_qs(post_data.decode('utf-8'))
 
-            self.send_response(200)
-            self.send_header('Content-type', 'text/html')
-            self.end_headers()
-            response = f"Hello, this is a POST response! You sent: {post_data}"
-            self.wfile.write(response.encode('utf-8'))
+            if self.path == "/create":
+                self.handle_create(post_data)
+            elif self.path == "/login":
+                self.handle_login(post_data)
+            else:
+                self.send_response(404)
+                self.end_headers()
         else:
             self.send_response(400)
-            self.send_header('Content-type', 'text/html')
             self.end_headers()
             self.wfile.write(b"No content in POST request")
+
+    def handle_create(self, post_data):
+        login = post_data.get('login', [None])[0]
+        password = post_data.get('password', [None])[0]
+
+        if not login or not password:
+            self.send_response(400)
+            self.end_headers()
+            self.wfile.write(b"Missing login or password")
+            return
+
+        if login in clients:
+            self.send_response(400)
+            self.end_headers()
+            self.wfile.write(b"Login already exists")
+            return
+
+        client_id = str(len(clients) + 1)
+        assigned_storage = self.server.assign_storage()
+
+        storage_response = assigned_storage.create_client(client_id)
+        if storage_response:
+            clients[login] = {
+                "password": password,
+                "client_id": client_id,
+                "uuid": storage_response.get('uuid'),
+                "storage_ip": assigned_storage.ip,
+                "storage_port": assigned_storage.port
+            }
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            response = {
+                "client_id": client_id,
+                "uuid": storage_response.get('uuid'),
+                "storage_ip": assigned_storage.ip,
+                "storage_port": assigned_storage.port
+            }
+            self.wfile.write(json.dumps(response).encode('utf-8'))
+        else:
+            self.send_response(500)
+            self.end_headers()
+            self.wfile.write(b"Failed to create client on storage")
+
+    def handle_login(self, post_data):
+        login = post_data.get('login', [None])[0]
+        password = post_data.get('password', [None])[0]
+
+        if not login or not password:
+            self.send_response(400)
+            self.end_headers()
+            self.wfile.write(b"Missing login or password")
+            return
+
+        client_info = clients.get(login)
+        if client_info and client_info["password"] == password:
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            response = {
+                "client_id": client_info["client_id"],
+                "uuid": client_info["uuid"],
+                "storage_ip": client_info["storage_ip"],
+                "storage_port": client_info["storage_port"]
+            }
+            self.wfile.write(json.dumps(response).encode('utf-8'))
+        else:
+            self.send_response(403)
+            self.end_headers()
+            self.wfile.write(b"Invalid login or password")
 
     def finish(self):
         if self.wfile:
@@ -104,6 +190,10 @@ def run(args, active_storages):
 
     httpd = HTTPServer((args.address, args.port), HTTPHandler)
     httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
+
+    def assign_storage():
+        return active_storages[0]
+    httpd.assign_storage = assign_storage
 
     server_thread = threading.Thread(target=httpd.serve_forever)
     server_thread.daemon = True

@@ -5,6 +5,14 @@ import urllib3
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+class Storage:
+    def __init__(self, client_id, uuid, storage_ip, storage_port):
+        self.client_id = client_id
+        self.uuid = uuid
+        self.storage_ip = storage_ip
+        self.storage_port = storage_port
+
+
 class Terminal:
     def __init__(self, config):
         self.session = {
@@ -14,15 +22,18 @@ class Terminal:
             'host': config['fs']['host'],
             'port': config['fs']['port'],
             'verbose': False,
-            'verify_ssl': config['verify_ssl']
+            'verify_ssl': config['verify_ssl'],
+            'storage_ip': None,
+            'storage_port': None,
+            'uuid' : None
         }
         self.history = []
-        # Map command names to handler methods with descriptions for help
         self.commands = {
+            "create": ("handle_create", "Create account"),
             "login": ("handle_login", "Login to the terminal (not supported yet)"),
             "pwd": ("handle_pwd", "Print current working directory"),
             "cd": ("handle_cd", "Change directory"),
-            "ping": ("ping", "Ping the server"),
+            "ping": ("handle_ping", "Ping the server"),
             "verbose": ("handle_verbose", "Toggle verbose logging"),
             "host": ("handle_host", "Set server host (not supported yet)"),
             "port": ("handle_port", "Set server port (not supported yet)"),
@@ -35,8 +46,11 @@ class Terminal:
             "help": ("handle_help", "Show available commands"),
         }
 
-    def get_fs_url(self):
+    def get_balancer_url(self):
         return f"{self.session['protocol']}://{self.session['host']}:{self.session['port']}"
+
+    def get_storage_url(self):
+        return f"{self.session['protocol']}://{self.session['storage_ip']}:{self.session['storage_port']}"
 
     def set_login(self, login):
         self.session['login'] = login
@@ -49,6 +63,24 @@ class Terminal:
 
     def set_port(self, port):
         self.session['port'] = port
+
+    def set_storage_ip(self, storage_ip):
+        self.session['storage_ip'] = storage_ip
+
+    def set_storage_port(self, storage_port):
+        self.session['storage_port'] = storage_port
+
+    def set_uuid(self, uuid):
+        self.session['uuid'] = uuid
+
+    def get_uuid(self):
+        return self.session['uuid']
+
+    def get_storage_ip(self):
+        return self.session['storage_ip']
+
+    def get_storage_port(self):
+        return self.session['storage_port']
 
     def set_verbose(self, verbose):
         self.session['verbose'] = verbose
@@ -78,47 +110,83 @@ class Terminal:
     def add_to_history(self, new_line):
         self.history.append(new_line)
 
-    def send_query(self, route, method="GET"):
+    def send_query(self, route, method="GET", balancer=False, data=None, json_payload=None):
         verify_ssl = self.session['verify_ssl']
         try:
-            query = f"{self.get_fs_url()}/{route}"
+            query = f"{self.get_balancer_url() if balancer else self.get_storage_url()}/{route}"
             self.verbose_log(f"send query '{query}'")
-            response = requests.request(method, query, verify=verify_ssl)
+
+            if data:
+                self.verbose_log(f"send data: {data}")
+                response = requests.request(method, query, data=data, verify=verify_ssl)
+            elif json_payload:
+                self.verbose_log(f"send JSON payload: {json_payload}")
+                response = requests.request(method, query, json=json_payload, verify=verify_ssl)
+            else:
+                response = requests.request(method, query, verify=verify_ssl)
+
+            self.verbose_log(f"Answer: {response.text}")
             response.raise_for_status()
             return response
+
         except requests.RequestException as error:
             self.verbose_log(json.dumps(str(error), indent=1))
             return None
 
-    def ping(self):
-        response = self.send_query("ping")
+    def handle_ping(self):
+        response = self.send_query("handle_ping")
         return response.text if response else "Error pinging server"
 
     def ls(self, path):
-        response = self.send_query(f"ls?path={path}")
+        response = self.send_query(f"ls?uuid={self.get_uuid()}&path={path}")
         return json.dumps(response.json()['entries'], indent=1) if response else "Error executing ls"
 
     def cat(self, path, offset='', size=''):
-        response = self.send_query(f"cat?path={path}&offset={offset}&size={size}")
+        response = self.send_query(f"cat?uuid={self.get_uuid()}&path={path}&offset={offset}&size={size}")
         return response.text if response else "Error executing cat"
 
     def store(self, dir, file, data):
-        response = self.send_query(f"store?dir={dir}&file={file}&data={data}", method="POST")
+        response = self.send_query(f"store?uuid={self.get_uuid()}&dir={dir}&file={file}&data={data}", method="POST")
         return json.dumps(response.json(), indent=1) if response else "Error executing store"
 
     def mkdir(self, at, dir):
-        response = self.send_query(f"mkdir?at={at}&dir={dir}", method="POST")
+        response = self.send_query(f"mkdir?uuid={self.get_uuid()}&at={at}&dir={dir}", method="POST")
         return json.dumps(response.json(), indent=1) if response else "Error executing mkdir"
 
     def squash_consecutive_slashes(self, path):
         return path.replace('//', '/')
 
+    @staticmethod
+    def handle_cmd(func):
+        def wrapper(*args):
+            self = args[0]
+            if not self.get_storage_ip() or not self.get_storage_port():
+                return "Firstly, login or create an account"
+            return func(*args)
+        return wrapper
+
+    def handle_create(self, cmds):
+        if len(cmds) != 2:
+            return "Please, specify both login and password separated by space"
+
+        data = {"login" : cmds[0], "password" : cmds[1]}
+        response = self.send_query("create", method="POST", balancer=True, data=data)
+        if response:
+            self.set_storage_ip(response.json()['storage_ip'])
+            self.set_storage_port(response.json()['storage_port'])
+            self.set_uuid(response.json()['uuid'])
+        else:
+            return "Error executing create"
+        return json.dumps(response.json(), indent=1)
+
     def handle_login(self, cmds):
         return "Not supported yet"
 
+    @handle_cmd
     def handle_pwd(self, cmds):
         return self.session['cwd']
 
+    @handle_cmd
     def handle_cd(self, cmds):
         if not cmds:
             path = '/'
@@ -143,15 +211,19 @@ class Terminal:
         self.set_verbose(verbose)
         return f"set verbose to '{verbose}'"
 
+    @handle_cmd
     def handle_host(self, cmds):
         return "Not supported yet"
 
+    @handle_cmd
     def handle_port(self, cmds):
         return "Not supported yet"
 
+    @handle_cmd
     def handle_info(self, cmds):
         return f"Session info: {json.dumps(self.session, indent=1)}"
 
+    @handle_cmd
     def handle_ls(self, cmds):
         path = cmds[0] if cmds and cmds[0].startswith('/') else f"{self.session['cwd']}/{cmds[0]}" if cmds else self.session['cwd']
         response = self.ls(path)
@@ -160,6 +232,7 @@ class Terminal:
         entries = json.loads(response)
         return Terminal.format_ls(entries)
 
+    @handle_cmd
     def handle_cat(self, cmds):
         if not cmds:
             return "Please, specify path to cat"
@@ -168,6 +241,7 @@ class Terminal:
         size = cmds[2] if len(cmds) > 2 else ""
         return self.cat(path, offset, size)
 
+    @handle_cmd
     def handle_store(self, cmds):
         if len(cmds) < 2:
             return "Please, specify file name and data to store"
@@ -178,6 +252,7 @@ class Terminal:
         entry = json.loads(response)
         return Terminal.format_store(entry)
 
+    @handle_cmd
     def handle_mkdir(self, cmds):
         if len(cmds) != 1:
             return "Please, specify new directory name"
@@ -190,8 +265,8 @@ class Terminal:
     def handle_history(self, cmds):
         return '\n'.join(self.history)
 
+    @handle_cmd
     def handle_help(self, cmds):
-        # Display all available commands and their descriptions
         help_text = "Available commands:\n"
         for cmd, (_, description) in self.commands.items():
             help_text += f"    {cmd}: {description}\n"
@@ -208,7 +283,6 @@ class Terminal:
         command_info = self.commands.get(bin)
         if command_info:
             handler_method_name = command_info[0]
-            # Use getattr to call the corresponding handler dynamically
             handler_method = getattr(self, handler_method_name)
             return handler_method(cmds)
         else:

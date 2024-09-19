@@ -1,7 +1,11 @@
 #include <cstdlib>
 #include <iostream>
+#include <string>
 
 #include <boost/json.hpp>
+#include <boost/uuid/uuid.hpp>
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid_io.hpp>
 
 #include "error_types.h"
 #define CPPHTTPLIB_OPENSSL_SUPPORT
@@ -54,6 +58,25 @@ void SetError(
   res.set_content(boost::json::serialize(error_info), "text/json");
 }
 
+using ClientId = std::string;
+
+std::unordered_map<ClientId, std::string> client_id_to_uuid_;
+
+tl::expected<Partition*, Error> LookupPartitionForRequest(httplib::Request const& req, Storage<InMemoryPartitionManager> *storage) {
+      std::string uuid = req.get_param_value("uuid");
+      if (uuid.empty()) {
+          return tl::unexpected(Error{.code = ErrorEnum::kInvalidInput,
+              .message = "create_client body is invalid: " + req.body});
+      }
+
+      if (auto partition = storage->LookupPartition(uuid); partition.has_value()) {
+          return partition.value();
+      }
+
+      return tl::unexpected(Error{.code = ErrorEnum::kNotFound,
+              .message = "couldn't find partition with specified uuid: " + req.body});
+}
+
 }  // namespace
 
 void SetCorsHeaders(httplib::Response& res) {
@@ -72,9 +95,6 @@ int StartFS(std::string const& host, int port,
   std::string uuid{kValidUUID};
   auto storage =
       CreateDefaultStorage<cppfs::storage::InMemoryPartitionManager>();
-  auto partition = storage->CreatePartition(uuid);
-  cppfs::storage::Directory* root = partition.value()->OpenRoot();
-  root->StoreRegularFile("16B.txt", "012345678901234");
 
   if (!std::filesystem::is_regular_file(cert)) {
     std::cout << "Certificate file " << cert
@@ -127,6 +147,12 @@ int StartFS(std::string const& host, int port,
   });
 
   server.Get("/ls", [&](httplib::Request const& req, httplib::Response& res) {
+      auto partition = LookupPartitionForRequest(req, storage);
+      if (!partition.has_value()) {
+          SetError(res, partition.error());
+          return;
+      }
+
     std::filesystem::path path{req.get_param_value("path")};
     if (path.empty()) path = "/";
 
@@ -158,6 +184,12 @@ int StartFS(std::string const& host, int port,
   });
 
   server.Get("/cat", [&](httplib::Request const& req, httplib::Response& res) {
+    auto partition = LookupPartitionForRequest(req, storage);
+      if (!partition.has_value()) {
+          SetError(res, partition.error());
+          return;
+      }
+
     std::filesystem::path path{req.get_param_value("path")};
 
     tl::expected<RegularFile*, Error> reg_file_expected =
@@ -210,6 +242,12 @@ int StartFS(std::string const& host, int port,
 
   server.Post(
       "/mkdir", [&](httplib::Request const& req, httplib::Response& res) {
+    auto partition = LookupPartitionForRequest(req, storage);
+      if (!partition.has_value()) {
+          SetError(res, partition.error());
+          return;
+      }
+
         std::filesystem::path dir_path{req.get_param_value("at")};
         if (dir_path.empty()) dir_path = "/";
 
@@ -249,6 +287,12 @@ int StartFS(std::string const& host, int port,
 
   server.Post("/store", [&](httplib::Request const& req,
                             httplib::Response& res) {
+    auto partition = LookupPartitionForRequest(req, storage);
+      if (!partition.has_value()) {
+          SetError(res, partition.error());
+          return;
+      }
+
     std::filesystem::path dir_path{req.get_param_value("dir")};
     if (dir_path.empty()) dir_path = "/";
 
@@ -291,6 +335,38 @@ int StartFS(std::string const& host, int port,
         {"type", FileTypeToString(reg_file->GetType())},
     };
     res.set_content(boost::json::serialize(store_res), "application/json");
+  });
+
+  server.Post("/create_client", [&](httplib::Request const& req,
+                                    httplib::Response& res) {
+      std::error_code ec;
+      boost::json::value body = boost::json::parse(req.body, ec);
+      if (ec) {
+          SetError(res, Error{.code = ErrorEnum::kInvalidInput,
+              .message = "create_client body is invalid: " + req.body});
+          return;
+      }
+      std::string client_id = body.at("client_id").as_string().c_str();
+
+      auto it = client_id_to_uuid_.find(client_id);
+      std::string uuid;
+      if (it == client_id_to_uuid_.end()) {
+          boost::uuids::uuid new_uuid = boost::uuids::random_generator()();
+          uuid = boost::uuids::to_string(new_uuid);
+          storage->CreatePartition(uuid);
+          client_id_to_uuid_.emplace(client_id, uuid);
+      } else if (storage->LookupPartition(uuid).has_value()) {
+          uuid = it->second;
+      } else {
+          SetError(res, Error{.code = ErrorEnum::kInternalServerError, .message = "Couldn't generate uuid"});
+          return;
+      }
+
+      boost::json::object create_res{
+          {"client_id", client_id},
+              {"uuid", uuid}
+      };
+      res.set_content(boost::json::serialize(create_res), "application/json");
   });
 
   server.listen(host, port);
