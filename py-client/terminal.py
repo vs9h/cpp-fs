@@ -1,6 +1,9 @@
 import requests
 import json
 import argparse
+import urllib3
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 class Terminal:
     def __init__(self, config):
@@ -11,6 +14,7 @@ class Terminal:
             'host': config['fs']['host'],
             'port': config['fs']['port'],
             'verbose': False,
+            'verify_ssl': config['verify_ssl']
         }
         self.history = []
         # Map command names to handler methods with descriptions for help
@@ -75,10 +79,11 @@ class Terminal:
         self.history.append(new_line)
 
     def send_query(self, route, method="GET"):
+        verify_ssl = self.session['verify_ssl']
         try:
             query = f"{self.get_fs_url()}/{route}"
             self.verbose_log(f"send query '{query}'")
-            response = requests.request(method, query)
+            response = requests.request(method, query, verify=verify_ssl)
             response.raise_for_status()
             return response
         except requests.RequestException as error:
@@ -230,6 +235,7 @@ def parse_config():
     parser.add_argument('--protocol', type=str, default='http', help='Filesystem protocol (default: http)')
     parser.add_argument('--host', type=str, default='localhost', help='Filesystem host (default: localhost)')
     parser.add_argument('--port', type=int, default=8080, help='Filesystem port (default: 8080)')
+    parser.add_argument('--verify-ssl', action='store_true', help='Disable SSL certificate verification')
 
     args = parser.parse_args()
 
@@ -237,8 +243,9 @@ def parse_config():
         "fs": {
             "protocol": args.protocol,
             "host": args.host,
-            "port": args.port
-        }
+            "port": args.port,
+        },
+        "verify_ssl": args.verify_ssl
     }
 
     return config
