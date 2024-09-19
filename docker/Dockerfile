@@ -8,6 +8,6 @@ RUN pip3 install conan==2.3.0 --break-system-packages
 
 WORKDIR /cppfs/
 
-EXPOSE 4443
+EXPOSE 4443 3000 8080
 
 CMD ["bash"]
