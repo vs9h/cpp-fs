@@ -4,6 +4,7 @@
 #include <boost/json.hpp>
 
 #include "error_types.h"
+#define CPPHTTPLIB_OPENSSL_SUPPORT
 #include "httplib.h"
 #include "partition/in_memory_partition.hpp"
 #include "partition/partition.hpp"
@@ -64,7 +65,9 @@ void SetCorsHeaders(httplib::Response& res) {
       "Origin, X-Requested-With, Content-Type, Accept, Authorization");
 }
 
-int StartFS(std::string const& host, int port) {
+int StartFS(std::string const& host, int port,
+            std::filesystem::path const& cert,
+            std::filesystem::path const& key) {
   /* Init some test data */
   std::string uuid{kValidUUID};
   auto storage =
@@ -73,7 +76,18 @@ int StartFS(std::string const& host, int port) {
   cppfs::storage::Directory* root = partition.value()->OpenRoot();
   root->StoreRegularFile("16B.txt", "012345678901234");
 
-  httplib::Server server;
+  if (!std::filesystem::is_regular_file(cert)) {
+    std::cout << "Certificate file " << cert
+              << " is not a regular file or doesn't exist.\n";
+    return EXIT_FAILURE;
+  }
+  if (!std::filesystem::is_regular_file(key)) {
+    std::cout << "Key file " << key
+              << " is not a regular file or doesn't exist.\n";
+    return EXIT_FAILURE;
+  }
+
+  httplib::SSLServer server(cert.c_str(), key.c_str());
   if (!server.is_valid()) {
     std::cout << "Cannot start storage server" << std::endl;
     return EXIT_FAILURE;

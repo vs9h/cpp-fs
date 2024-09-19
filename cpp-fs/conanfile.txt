@@ -3,6 +3,8 @@ boost/1.84.0
 gtest/1.14.0
 tl-expected/20190710
 cpp-httplib/0.17.3
+openssl/3.3.1
+cli11/2.4.2
 
 [generators]
 CMakeDeps
