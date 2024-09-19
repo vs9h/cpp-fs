@@ -4,6 +4,7 @@ import ssl
 import argparse
 import sys
 import signal
+import threading
 
 class HTTPHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -13,15 +14,21 @@ class HTTPHandler(BaseHTTPRequestHandler):
         self.wfile.write(b"Hello, this is a GET response!")
 
     def do_POST(self):
-        content_length = int(self.headers['Content-Length'])
-        post_data = self.rfile.read(content_length)
-        post_data = urllib.parse.parse_qs(post_data.decode('utf-8'))
+        content_length = int(self.headers.get('Content-Length', 0))
+        if content_length > 0:
+            post_data = self.rfile.read(content_length)
+            post_data = urllib.parse.parse_qs(post_data.decode('utf-8'))
 
-        self.send_response(200)
-        self.send_header('Content-type', 'text/html')
-        self.end_headers()
-        response = f"Hello, this is a POST response! You sent: {post_data}"
-        self.wfile.write(response.encode('utf-8'))
+            self.send_response(200)
+            self.send_header('Content-type', 'text/html')
+            self.end_headers()
+            response = f"Hello, this is a POST response! You sent: {post_data}"
+            self.wfile.write(response.encode('utf-8'))
+        else:
+            self.send_response(400)
+            self.send_header('Content-type', 'text/html')
+            self.end_headers()
+            self.wfile.write(b"No content in POST request")
 
     def finish(self):
         if self.wfile:
@@ -30,27 +37,46 @@ class HTTPHandler(BaseHTTPRequestHandler):
             except BrokenPipeError as e:
                 print(f"Got error flushing the response stream: {e}")
         try:
-            # Explicitly unwrap the SSL connection to send the close_notify alert
-            self.connection = self.connection.unwrap()
-        except (ssl.SSLError, OSError) as e:
-            print(f"Got error unwrapping the connection: {e}")
-        finally:
             self.connection.close()
+        except (ssl.SSLError, OSError) as e:
+            print(f"Got error closing the connection: {e}")
 
-def signal_handler(_signal, _frame):
-    print('Stopping server...')
-    sys.exit(0)
+def signal_handler_factory(httpd):
+    def signal_handler(_signal, _frame):
+        print('Stopping server...')
+        httpd.shutdown()  # Gracefully shut down the server
+        httpd.server_close()  # Close the socket
+        sys.exit(0)
+    return signal_handler
+
 
 def run(args):
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.load_cert_chain(certfile=args.certificate, keyfile=args.key)
     context.check_hostname = False
 
+    httpd = HTTPServer((args.address, args.port), HTTPHandler)
+    httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
+
+    # Run the server in a separate thread to allow graceful shutdown
+    server_thread = threading.Thread(target=httpd.serve_forever)
+    server_thread.daemon = True  # Make sure the thread exits when main program exits
+    server_thread.start()
+
+    print(f"Serving on https://{args.address}:{args.port}")
+
+    def signal_handler(_signal, _frame):
+        print('Stopping server...')
+        httpd.shutdown()  # Gracefully shut down the server
+        httpd.server_close()  # Close the socket
+        print('Server stopped')
+
     signal.signal(signal.SIGINT, signal_handler)
 
-    with HTTPServer((args.address, args.port), HTTPHandler) as httpd:
-        httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
-        httpd.serve_forever()
+    try:
+        server_thread.join()  # Wait for the server thread to finish
+    except KeyboardInterrupt:
+        print("Received interrupt, shutting down...")
 
 def parse_cl_args():
     parser = argparse.ArgumentParser(
