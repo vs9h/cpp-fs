@@ -4,3 +4,5 @@ cpp-fs/CMakeUserPresets.json
 *.pem
 .cache
 compile_commands.json
+yarn.lock
+package-lock.json
