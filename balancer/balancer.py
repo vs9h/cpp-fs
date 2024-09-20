@@ -93,6 +93,11 @@ class HTTPHandler(BaseHTTPRequestHandler):
 
         client_id = login
         assigned_storage = self.server.assign_storage()
+        if not assigned_storage:
+            self.send_response(500)
+            self.end_headers()
+            self.wfile.write(b"No storages available")
+            return
 
         storage_response = assigned_storage.create_client(client_id)
         if storage_response:
@@ -182,6 +187,21 @@ def run_health_checks(active_storages, inactive_storages, interval=60):
 
         time.sleep(interval)
 
+class RoundRobinStorageAssigner:
+    def __init__(self, storages):
+        self.storages = storages
+        self.current_index = 0
+
+    def get_next_storage(self):
+        if not self.storages:
+            return None
+
+        storage = self.storages[self.current_index]
+
+        self.current_index = (self.current_index + 1) % len(self.storages)
+
+        return storage
+
 def run(args, active_storages):
     inactive_storages = []
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
@@ -191,8 +211,9 @@ def run(args, active_storages):
     httpd = HTTPServer((args.address, args.port), HTTPHandler)
     httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
 
+    storage_assigner = RoundRobinStorageAssigner(active_storages)
     def assign_storage():
-        return active_storages[0]
+        return storage_assigner.get_next_storage()
     httpd.assign_storage = assign_storage
 
     server_thread = threading.Thread(target=httpd.serve_forever)

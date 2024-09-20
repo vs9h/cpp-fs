@@ -112,6 +112,7 @@ class Terminal:
 
     def send_query(self, route, method="GET", balancer=False, data=None, json_payload=None):
         verify_ssl = self.session['verify_ssl']
+        response = None
         try:
             query = f"{self.get_balancer_url() if balancer else self.get_storage_url()}/{route}"
             self.verbose_log(f"send query '{query}'")
@@ -125,12 +126,11 @@ class Terminal:
             else:
                 response = requests.request(method, query, verify=verify_ssl)
 
-            self.verbose_log(f"Answer: {response.text}")
+            self.verbose_log(f"Response: {response.text}")
             response.raise_for_status()
             return response
-
         except requests.RequestException as error:
-            self.verbose_log(json.dumps(str(error), indent=1))
+            print(json.dumps({'Response': str(error), 'Message' : response.text}, indent=1))
             return None
 
     def handle_ping(self):
