@@ -19,8 +19,8 @@ class Terminal:
             'login': 'guest',
             'cwd': '/',
             'protocol': config['fs']['protocol'],
-            'host': config['fs']['host'],
-            'port': config['fs']['port'],
+            'balancer_ip': config['fs']['balancer_ip'],
+            'balancer_port': config['fs']['balancer_port'],
             'verbose': False,
             'verify_ssl': config['verify_ssl'],
             'storage_ip': None,
@@ -47,7 +47,7 @@ class Terminal:
         }
 
     def get_balancer_url(self):
-        return f"{self.session['protocol']}://{self.session['host']}:{self.session['port']}"
+        return f"{self.session['protocol']}://{self.session['balancer_ip']}:{self.session['balancer_port']}"
 
     def get_storage_url(self):
         return f"{self.session['protocol']}://{self.session['storage_ip']}:{self.session['storage_port']}"
@@ -58,11 +58,11 @@ class Terminal:
     def set_cwd(self, cwd):
         self.session['cwd'] = cwd
 
-    def set_host(self, host):
-        self.session['host'] = host
+    def set_balancer_ip(self, ip):
+        self.session['balancer_ip'] = ip
 
-    def set_port(self, port):
-        self.session['port'] = port
+    def set_balancer_port(self, port):
+        self.session['balancer_port'] = port
 
     def set_storage_ip(self, storage_ip):
         self.session['storage_ip'] = storage_ip
@@ -319,18 +319,18 @@ class Terminal:
 def parse_config():
     parser = argparse.ArgumentParser(description='Terminal Configuration')
 
-    parser.add_argument('--protocol', type=str, default='http', help='Filesystem protocol (default: http)')
-    parser.add_argument('--host', type=str, default='localhost', help='Filesystem host (default: localhost)')
-    parser.add_argument('--port', type=int, default=8080, help='Filesystem port (default: 8080)')
-    parser.add_argument('--verify-ssl', action='store_true', help='Disable SSL certificate verification')
+    parser.add_argument('--protocol', type=str, default='https', help='Protocol to use (default: https)')
+    parser.add_argument('--ip', type=str, default='localhost', help='Balancer ip address (default: localhost)')
+    parser.add_argument('--port', type=int, default=8080, help='Balancer port (default: 8080)')
+    parser.add_argument('--verify-ssl', action='store_true', help='Enable SSL certificate verification')
 
     args = parser.parse_args()
 
     config = {
         "fs": {
             "protocol": args.protocol,
-            "host": args.host,
-            "port": args.port,
+            "balancer_ip": args.ip,
+            "balancer_port": args.port,
         },
         "verify_ssl": args.verify_ssl
     }
