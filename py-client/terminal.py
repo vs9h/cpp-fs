@@ -112,7 +112,6 @@ class Terminal:
 
     def send_query(self, route, method="GET", balancer=False, data=None, json_payload=None):
         verify_ssl = self.session['verify_ssl']
-        response = None
         try:
             query = f"{self.get_balancer_url() if balancer else self.get_storage_url()}/{route}"
             self.verbose_log(f"send query '{query}'")
@@ -129,8 +128,14 @@ class Terminal:
             self.verbose_log(f"Response: {response.text}")
             response.raise_for_status()
             return response
+
+        except requests.ConnectionError as error:
+            print("Storage seems unreachable")
         except requests.RequestException as error:
-            print(json.dumps({'Response': str(error), 'Message' : response.text}, indent=1))
+            error_message = {'Response': str(error)}
+            if 'response' in locals():
+                error_message['Message'] = response.text
+            print(json.dumps(error_message, indent=1))
             return None
 
     def handle_ping(self):
