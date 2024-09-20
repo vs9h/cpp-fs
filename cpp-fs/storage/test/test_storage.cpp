@@ -2,6 +2,7 @@
 
 #include "error_types.h"
 #include "partition/in_memory_partition.hpp"
+#include "partition/on_disk_partition.hpp"
 #include "storage.hpp"
 
 namespace tests::storage {
@@ -27,7 +28,8 @@ constexpr auto kInvalidUUID = "00000000-0000-0000-0000-000000000000";
 }  // namespace
 
 using PartitionManagers =
-    testing::Types<cppfs::storage::InMemoryPartitionManager>;
+    testing::Types<cppfs::storage::InMemoryPartitionManager,
+                   cppfs::storage::OnDiskPartitionManager>;
 
 TYPED_TEST_SUITE(StorageTest, PartitionManagers);
 

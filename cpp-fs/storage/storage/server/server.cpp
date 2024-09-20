@@ -11,6 +11,7 @@
 #define CPPHTTPLIB_OPENSSL_SUPPORT
 #include "httplib.h"
 #include "partition/in_memory_partition.hpp"
+#include "partition/on_disk_partition.hpp"
 #include "partition/partition.hpp"
 #include "storage.hpp"
 
@@ -62,19 +63,23 @@ using ClientId = std::string;
 
 std::unordered_map<ClientId, std::string> client_id_to_uuid_;
 
-tl::expected<Partition*, Error> LookupPartitionForRequest(httplib::Request const& req, Storage<InMemoryPartitionManager> *storage) {
-      std::string uuid = req.get_param_value("uuid");
-      if (uuid.empty()) {
-          return tl::unexpected(Error{.code = ErrorEnum::kInvalidInput,
+template <typename T>
+tl::expected<Partition*, Error> LookupPartitionForRequest(
+    httplib::Request const& req, Storage<T>* storage) {
+  std::string uuid = req.get_param_value("uuid");
+  if (uuid.empty()) {
+    return tl::unexpected(
+        Error{.code = ErrorEnum::kInvalidInput,
               .message = "create_client body is invalid: " + req.body});
-      }
+  }
 
-      if (auto partition = storage->LookupPartition(uuid); partition.has_value()) {
-          return partition.value();
-      }
+  if (auto partition = storage->LookupPartition(uuid); partition.has_value()) {
+    return partition.value();
+  }
 
-      return tl::unexpected(Error{.code = ErrorEnum::kNotFound,
-              .message = "couldn't find partition with specified uuid: " + req.body});
+  return tl::unexpected(Error{
+      .code = ErrorEnum::kNotFound,
+      .message = "couldn't find partition with specified uuid: " + req.body});
 }
 
 }  // namespace
@@ -92,9 +97,7 @@ int StartFS(std::string const& host, int port,
             std::filesystem::path const& cert,
             std::filesystem::path const& key) {
   /* Init some test data */
-  std::string uuid{kValidUUID};
-  auto storage =
-      CreateDefaultStorage<cppfs::storage::InMemoryPartitionManager>();
+  auto storage = CreateDefaultStorage<cppfs::storage::OnDiskPartitionManager>();
 
   if (!std::filesystem::is_regular_file(cert)) {
     std::cout << "Certificate file " << cert
@@ -147,11 +150,11 @@ int StartFS(std::string const& host, int port,
   });
 
   server.Get("/ls", [&](httplib::Request const& req, httplib::Response& res) {
-      auto partition = LookupPartitionForRequest(req, storage);
-      if (!partition.has_value()) {
-          SetError(res, partition.error());
-          return;
-      }
+    auto partition = LookupPartitionForRequest(req, storage);
+    if (!partition.has_value()) {
+      SetError(res, partition.error());
+      return;
+    }
 
     std::filesystem::path path{req.get_param_value("path")};
     if (path.empty()) path = "/";
@@ -185,10 +188,10 @@ int StartFS(std::string const& host, int port,
 
   server.Get("/cat", [&](httplib::Request const& req, httplib::Response& res) {
     auto partition = LookupPartitionForRequest(req, storage);
-      if (!partition.has_value()) {
-          SetError(res, partition.error());
-          return;
-      }
+    if (!partition.has_value()) {
+      SetError(res, partition.error());
+      return;
+    }
 
     std::filesystem::path path{req.get_param_value("path")};
 
@@ -242,11 +245,11 @@ int StartFS(std::string const& host, int port,
 
   server.Post(
       "/mkdir", [&](httplib::Request const& req, httplib::Response& res) {
-    auto partition = LookupPartitionForRequest(req, storage);
-      if (!partition.has_value()) {
+        auto partition = LookupPartitionForRequest(req, storage);
+        if (!partition.has_value()) {
           SetError(res, partition.error());
           return;
-      }
+        }
 
         std::filesystem::path dir_path{req.get_param_value("at")};
         if (dir_path.empty()) dir_path = "/";
@@ -288,10 +291,10 @@ int StartFS(std::string const& host, int port,
   server.Post("/store", [&](httplib::Request const& req,
                             httplib::Response& res) {
     auto partition = LookupPartitionForRequest(req, storage);
-      if (!partition.has_value()) {
-          SetError(res, partition.error());
-          return;
-      }
+    if (!partition.has_value()) {
+      SetError(res, partition.error());
+      return;
+    }
 
     std::filesystem::path dir_path{req.get_param_value("dir")};
     if (dir_path.empty()) dir_path = "/";
@@ -339,34 +342,33 @@ int StartFS(std::string const& host, int port,
 
   server.Post("/create_client", [&](httplib::Request const& req,
                                     httplib::Response& res) {
-      std::error_code ec;
-      boost::json::value body = boost::json::parse(req.body, ec);
-      if (ec) {
-          SetError(res, Error{.code = ErrorEnum::kInvalidInput,
-              .message = "create_client body is invalid: " + req.body});
-          return;
-      }
-      std::string client_id = body.at("client_id").as_string().c_str();
+    std::error_code ec;
+    boost::json::value body = boost::json::parse(req.body, ec);
+    if (ec) {
+      SetError(res,
+               Error{.code = ErrorEnum::kInvalidInput,
+                     .message = "create_client body is invalid: " + req.body});
+      return;
+    }
+    std::string client_id = body.at("client_id").as_string().c_str();
 
-      auto it = client_id_to_uuid_.find(client_id);
-      std::string uuid;
-      if (it == client_id_to_uuid_.end()) {
-          boost::uuids::uuid new_uuid = boost::uuids::random_generator()();
-          uuid = boost::uuids::to_string(new_uuid);
-          storage->CreatePartition(uuid);
-          client_id_to_uuid_.emplace(client_id, uuid);
-      } else if (storage->LookupPartition(it->second).has_value()) {
-          uuid = it->second;
-      } else {
-          SetError(res, Error{.code = ErrorEnum::kInternalServerError, .message = "Couldn't generate uuid"});
-          return;
-      }
+    auto it = client_id_to_uuid_.find(client_id);
+    std::string uuid;
+    if (it == client_id_to_uuid_.end()) {
+      boost::uuids::uuid new_uuid = boost::uuids::random_generator()();
+      uuid = boost::uuids::to_string(new_uuid);
+      storage->CreatePartition(uuid);
+      client_id_to_uuid_.emplace(client_id, uuid);
+    } else if (storage->LookupPartition(it->second).has_value()) {
+      uuid = it->second;
+    } else {
+      SetError(res, Error{.code = ErrorEnum::kInternalServerError,
+                          .message = "Couldn't generate uuid"});
+      return;
+    }
 
-      boost::json::object create_res{
-          {"client_id", client_id},
-              {"uuid", uuid}
-      };
-      res.set_content(boost::json::serialize(create_res), "application/json");
+    boost::json::object create_res{{"client_id", client_id}, {"uuid", uuid}};
+    res.set_content(boost::json::serialize(create_res), "application/json");
   });
 
   server.listen(host, port);

@@ -33,7 +33,7 @@ class File {
  public:
   using Offset = ssize_t;
 
-  explicit File(FileType type) : type_(type){};
+  explicit File(FileType type) : type_(type) {};
   virtual ~File() = default;
 
   virtual size_t GetSize() const = 0;
