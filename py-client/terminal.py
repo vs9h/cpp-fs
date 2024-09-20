@@ -175,12 +175,25 @@ class Terminal:
             self.set_storage_ip(response.json()['storage_ip'])
             self.set_storage_port(response.json()['storage_port'])
             self.set_uuid(response.json()['uuid'])
+            self.set_login(response.json()['client_id'])
         else:
             return "Error executing create"
         return json.dumps(response.json(), indent=1)
 
     def handle_login(self, cmds):
-        return "Not supported yet"
+        if len(cmds) != 2:
+            return "Please, specify both login and password separated by space"
+
+        data = {"login" : cmds[0], "password" : cmds[1]}
+        response = self.send_query("login", method="POST", balancer=True, data=data)
+        if response:
+            self.set_storage_ip(response.json()['storage_ip'])
+            self.set_storage_port(response.json()['storage_port'])
+            self.set_uuid(response.json()['uuid'])
+            self.set_login(response.json()['client_id'])
+        else:
+            return "Error executing create"
+        return json.dumps(response.json(), indent=1)
 
     @handle_cmd
     def handle_pwd(self, cmds):

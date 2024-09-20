@@ -91,7 +91,7 @@ class HTTPHandler(BaseHTTPRequestHandler):
             self.wfile.write(b"Login already exists")
             return
 
-        client_id = str(len(clients) + 1)
+        client_id = login
         assigned_storage = self.server.assign_storage()
 
         storage_response = assigned_storage.create_client(client_id)
