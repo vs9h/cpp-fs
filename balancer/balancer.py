@@ -8,11 +8,13 @@ import time
 import requests
 import yaml
 import json
+import pickle
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import urllib3
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+clients_file = './clients.pkl'
 clients = {}
 
 class Storage:
@@ -108,6 +110,8 @@ class HTTPHandler(BaseHTTPRequestHandler):
                 "storage_ip": assigned_storage.ip,
                 "storage_port": assigned_storage.port
             }
+            with open(clients_file, 'wb') as f:
+                pickle.dump(clients, f)
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.end_headers()
@@ -259,6 +263,14 @@ def load_storages_from_yaml(yaml_path):
 def main():
     args = parse_cl_args()
     storages = load_storages_from_yaml(args.yaml)
+
+    global clients
+    try:
+        with open(clients_file, 'rb') as f:
+            clients = pickle.load(f)
+    except FileNotFoundError:
+        pass
+
     run(args, storages)
 
 
