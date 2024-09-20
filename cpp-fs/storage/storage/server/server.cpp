@@ -355,7 +355,7 @@ int StartFS(std::string const& host, int port,
           uuid = boost::uuids::to_string(new_uuid);
           storage->CreatePartition(uuid);
           client_id_to_uuid_.emplace(client_id, uuid);
-      } else if (storage->LookupPartition(uuid).has_value()) {
+      } else if (storage->LookupPartition(it->second).has_value()) {
           uuid = it->second;
       } else {
           SetError(res, Error{.code = ErrorEnum::kInternalServerError, .message = "Couldn't generate uuid"});
